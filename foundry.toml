@@ -5,6 +5,8 @@ libs = ["lib"]
 ffi = true
 fs_permissions = [{ access = "read-write", path = ".forge-snapshots/"}]
 solc_version = "0.8.26"
+optimizer = true
+optimizer-runs = 200
 evm_version = "cancun"
 
 
