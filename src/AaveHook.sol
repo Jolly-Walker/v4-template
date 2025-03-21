@@ -7,7 +7,7 @@ import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
-import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
+import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
 import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
@@ -37,12 +37,12 @@ contract Counter is BaseHook {
             afterAddLiquidity: false,
             beforeRemoveLiquidity: false,
             afterRemoveLiquidity: false,
-            beforeSwap: true,
+            beforeSwap: false,
             afterSwap: true,
             beforeDonate: false,
             afterDonate: false,
             beforeSwapReturnDelta: false,
-            afterSwapReturnDelta: false,
+            afterSwapReturnDelta: true,
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
         });
@@ -74,8 +74,23 @@ contract Counter is BaseHook {
         bytes calldata hookData
     ) internal override returns (bytes4, int128) {
         uint256 x = abi.decode(hookData, (uint256));
-        if (x == 1) {
-            aavePool.supply(Currency.unwrap(key.currency1), key.currency1.balanceOf(sender), sender, 0);
+
+        if (params.zeroForOne && x == 1) {
+            int128 amt = BalanceDeltaLibrary.amount1(delta);
+            if (amt > 0) {
+                uint256 amtOut =  uint256(uint128(amt));
+                poolManager.take(key.currency1, address(this), amtOut);
+                aavePool.supply(Currency.unwrap(key.currency1), amtOut, sender, 0);
+                return (BaseHook.afterSwap.selector, amt);
+            }
+        } else if (x == 1) {
+            int128 amt = BalanceDeltaLibrary.amount0(delta);
+            if (amt > 0) {
+                uint256 amtOut =  uint256(uint128(amt));
+                poolManager.take(key.currency0, address(this), amtOut);
+                aavePool.supply(Currency.unwrap(key.currency0), amtOut, sender, 0);
+                return (BaseHook.afterSwap.selector, amt);
+            }
         }
         return (BaseHook.afterSwap.selector, 0);
     }
