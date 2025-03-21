@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {Currency, CurrencyLibrary} from "v4-core/src/types/Currency.sol";
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
@@ -24,11 +23,12 @@ import {IERC6909Claims} from "v4-core/src/interfaces/external/IERC6909Claims.sol
 contract ERC6909SwapOptimizer is BaseHook {
     using SafeCast for *;
     // Track the minimum token amount worth converting to ERC6909
+
     uint256 public immutable MIN_AMOUNT_TO_MINT;
-    
+
     // Track user preferences
     mapping(address => bool) public userOptedIn;
-    
+
     // Track pending transfers
     struct PendingTransfer {
         address recipient;
@@ -36,24 +36,24 @@ contract ERC6909SwapOptimizer is BaseHook {
         uint256 amount;
         bool useERC6909;
     }
-    
+
     // Track input tokens that need to be provided from ERC6909 balances
     struct InputTokenRedemption {
         address user;
         Currency currency;
         uint256 amount;
     }
-    
+
     mapping(bytes32 => PendingTransfer) public pendingTransfers;
     mapping(bytes32 => InputTokenRedemption) public inputRedemptions;
-    
+
     // Event when ERC6909 tokens are used for swap input
     event ERC6909UsedForSwap(address indexed user, Currency indexed currency, uint256 amount);
-    
+
     constructor(IPoolManager _poolManager, uint256 _minAmountToMint) BaseHook(_poolManager) {
         MIN_AMOUNT_TO_MINT = _minAmountToMint;
     }
-    
+
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
             beforeInitialize: false,
@@ -72,7 +72,7 @@ contract ERC6909SwapOptimizer is BaseHook {
             afterRemoveLiquidityReturnDelta: false
         });
     }
-    
+
     function _afterSwap(
         address sender,
         PoolKey calldata key,
@@ -84,26 +84,25 @@ contract ERC6909SwapOptimizer is BaseHook {
         if (!userOptedIn[sender]) {
             return (BaseHook.afterSwap.selector, 0);
         }
-        
+
         // Determine which token the user is receiving
         BalanceDelta hookDelta = BalanceDeltaLibrary.ZERO_DELTA;
         Currency receivedCurrency;
         int128 receivedAmount;
-        
+
         if (params.zeroForOne && delta.amount1() < 0) {
             // User is receiving token1
             receivedCurrency = key.currency1;
             receivedAmount = -delta.amount1(); // Convert negative to positive
-            
+
             hookDelta = toBalanceDelta(0, delta.amount1());
             // Zero out the user's token1 receipt
             delta = toBalanceDelta(delta.amount0(), 0);
-            
         } else if (!params.zeroForOne && delta.amount0() < 0) {
             // User is receiving token0
             receivedCurrency = key.currency0;
             receivedAmount = -delta.amount0(); // Convert negative to positive
-        
+
             hookDelta = toBalanceDelta(delta.amount0(), 0);
             delta = toBalanceDelta(0, delta.amount1());
         } else {
@@ -116,5 +115,4 @@ contract ERC6909SwapOptimizer is BaseHook {
 
         return (BaseHook.afterSwap.selector, receivedAmount);
     }
-    
 }
